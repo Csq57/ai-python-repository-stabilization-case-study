@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+# SPDX-FileCopyrightText: 2026 Songquan Chen
+# SPDX-License-Identifier: MIT
 """Read-only, zero-dependency checks for a Python repository's basic upkeep.
 
 This is a small inventory, not a test runner, security scan, or OSS certification.
