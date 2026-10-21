@@ -9,10 +9,14 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(PROJECT_ROOT))
-from tools.repo_health_check import inspect_repository  # noqa: E402
+from tools.repo_health_check import (  # noqa: E402
+    MAX_DIRS_TO_INSPECT,
+    inspect_repository,
+)
 
 SCRIPT = PROJECT_ROOT / 'tools' / 'repo_health_check.py'
 
@@ -27,7 +31,7 @@ class HealthCheckTests(unittest.TestCase):
             status = self.statuses(Path(directory))
             self.assertEqual(status['README'], 'warning')
             self.assertEqual(status['License'], 'warning')
-            self.assertEqual(status['Python packaging'], 'warning')
+            self.assertEqual(status['Python packaging'], 'info')
             self.assertEqual(status['CI workflow'], 'warning')
             self.assertEqual(status['Tests'], 'warning')
             self.assertEqual(status['Contributing guide'], 'info')
@@ -77,9 +81,51 @@ class HealthCheckTests(unittest.TestCase):
             )
             self.assertEqual(completed.returncode, 0, completed.stderr)
             parsed = json.loads(completed.stdout)
-            self.assertEqual(parsed['warning_count'], 4)
+            self.assertEqual(parsed['warning_count'], 3)
             self.assertEqual(parsed['checks'][0]['name'], 'README')
             self.assertEqual(before, sorted(str(p.relative_to(repo)) for p in repo.rglob('*')))
+
+
+    def test_scan_error_reports_incomplete_search(self):
+        with tempfile.TemporaryDirectory() as directory:
+            def denied_walk(_root, *, topdown, followlinks, onerror):
+                self.assertTrue(topdown)
+                self.assertFalse(followlinks)
+                onerror(PermissionError('simulated denied directory'))
+                return iter(())
+
+            with patch('tools.repo_health_check.os.walk', side_effect=denied_walk):
+                test_check = next(
+                    c for c in inspect_repository(Path(directory)) if c.name == 'Tests'
+                )
+            self.assertEqual(test_check.status, 'warning')
+            self.assertIn('Incomplete search:', test_check.evidence)
+            self.assertIn('directory read error', test_check.evidence)
+            self.assertNotIn('No Python test module found', test_check.evidence)
+
+    def test_scan_limit_on_many_empty_directories_is_inconclusive(self):
+        with tempfile.TemporaryDirectory() as directory:
+            def many_empty_dirs(_root, *, topdown, followlinks, onerror):
+                self.assertTrue(topdown)
+                self.assertFalse(followlinks)
+                self.assertTrue(callable(onerror))
+                for _ in range(MAX_DIRS_TO_INSPECT + 1):
+                    yield directory, [], []
+
+            with patch('tools.repo_health_check.os.walk', side_effect=many_empty_dirs):
+                test_check = next(
+                    c for c in inspect_repository(Path(directory)) if c.name == 'Tests'
+                )
+            self.assertEqual(test_check.status, 'warning')
+            self.assertIn('Directory scan limit reached', test_check.evidence)
+            self.assertIn('recheck', test_check.next_step)
+
+    def test_nonpackaged_script_is_not_automatically_a_failure(self):
+        with tempfile.TemporaryDirectory() as directory:
+            repo = Path(directory)
+            (repo / 'README.md').write_text('script usage', encoding='utf-8')
+            status = self.statuses(repo)
+            self.assertEqual(status['Python packaging'], 'info')
 
     def test_strict_exit_code_and_invalid_path(self):
         with tempfile.TemporaryDirectory() as directory:
