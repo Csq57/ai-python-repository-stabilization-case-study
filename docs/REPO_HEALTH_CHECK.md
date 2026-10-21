@@ -1,3 +1,6 @@
+<!-- SPDX-FileCopyrightText: 2026 Songquan Chen -->
+<!-- SPDX-License-Identifier: MIT -->
+
 # Repository health inventory — experimental MVP
 
 This is a standalone, zero-dependency Python 3.11+ tool demonstrating a *read-only* repository-maintenance inventory. It was newly written for this public case-study repository, not copied from the private OpenTrendIQ product.
@@ -32,3 +35,10 @@ The tool checks for a README, explicit licence file, Python package metadata, a 
 ## Maturity
 
 Experimental MVP. No independent users, downloads, or adoption claims have been established. The tool and tests are proposed as a draft pull request for review and should not be represented as a production-ready product.
+
+## Licensing
+
+This MVP is licensed under the MIT terms at [tools/LICENSE](../tools/LICENSE),
+subject to the explicit [licensing scope](../LICENSING_SCOPE.md). Only the
+four enumerated newly developed tool-related files are covered. Existing
+case-study documents and diagrams are **not** automatically MIT-licensed.
