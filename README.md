@@ -81,7 +81,9 @@ certify code quality, security, or Codex for Open Source eligibility.
 This repository is **already public** on GitHub. The
 [publication checklist](PUBLICATION_CHECKLIST.md) is a historical, unfinished
 review checklist, not proof that public visibility or formal release was
-authorised. There is no licence file on the default branch as of 21 October
-2026. Choosing a licence and declaring an open-source release require an
-explicit rights-holder decision and privacy review. Product source code from
-the private OpenTrendIQ Lite repository is not included.
+authorised. The default branch had no licence file on 21 October 2026.
+A draft PR proposes MIT licensing strictly for four new utility-related files:
+see [licensing scope](LICENSING_SCOPE.md) and [tools/LICENSE](tools/LICENSE).
+The case study, diagrams, sample material and other historical files are not
+covered by this MIT grant. No general release or PR merge is authorised.
+Product source code from the private OpenTrendIQ Lite repository is not included.
