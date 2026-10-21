@@ -20,6 +20,7 @@ SKIP_DIRS = frozenset({
     'build', 'dist', '.ruff_cache', '.idea', '.vscode',
 })
 MAX_FILES_TO_INSPECT = 20_000
+MAX_DIRS_TO_INSPECT = 5_000
 
 
 @dataclass(frozen=True)
@@ -38,27 +39,45 @@ def _first_file(root: Path, names: Iterable[str]) -> str | None:
     return None
 
 
-def _test_files(root: Path) -> tuple[bool, bool]:
-    """Return (test_found, fully_scanned), never follow directory symlinks."""
-    count = 0
-    for current, dirs, files in os.walk(root, topdown=True, followlinks=False):
+def _test_files(root: Path) -> tuple[bool, str | None]:
+    """Return (test_found, incomplete_reason); never follow directory symlinks.
+
+    A detected test module is a conclusive presence check. If no test is found,
+    filesystem errors or scan limits must be reported as inconclusive.
+    """
+    files_seen = 0
+    dirs_seen = 0
+    walk_errors = 0
+
+    def onerror(_error: OSError) -> None:
+        nonlocal walk_errors
+        walk_errors += 1
+
+    for current, dirs, files in os.walk(
+        root, topdown=True, followlinks=False, onerror=onerror
+    ):
+        dirs_seen += 1
+        if dirs_seen > MAX_DIRS_TO_INSPECT:
+            return False, f'Directory scan limit reached ({MAX_DIRS_TO_INSPECT})'
         dirs[:] = sorted(
             d for d in dirs
             if d not in SKIP_DIRS and not (Path(current) / d).is_symlink()
         )
         for filename in sorted(files):
-            count += 1
-            if count > MAX_FILES_TO_INSPECT:
-                return False, False
+            files_seen += 1
+            if files_seen > MAX_FILES_TO_INSPECT:
+                return False, f'File scan limit reached ({MAX_FILES_TO_INSPECT})'
             file_path = Path(current) / filename
             if file_path.is_symlink() or not file_path.is_file():
                 continue
-            # Only match test modules in test directories or conventional root files.
+            # Inventory checks file names only; it never imports or runs tests.
             if filename.startswith('test_') and filename.endswith('.py'):
-                return True, True
+                return True, None
             if filename.endswith('_test.py'):
-                return True, True
-    return False, True
+                return True, None
+    if walk_errors:
+        return False, f'{walk_errors} directory read error(s)'
+    return False, None
 
 
 def inspect_repository(root: Path) -> list[Check]:
@@ -79,7 +98,7 @@ def inspect_repository(root: Path) -> list[Check]:
     record('License', _first_file(root, ('LICENSE', 'LICENSE.md', 'LICENSE.txt', 'COPYING', 'COPYING.md')),
            'Make a deliberate licensing decision with the rights holder; public code is not automatically open source.')
     record('Python packaging', _first_file(root, ('pyproject.toml', 'setup.cfg', 'setup.py')),
-           'If distributing a Python package, provide build/install metadata; this may not apply to docs-only repositories.')
+           'If distributing a Python package, provide build/install metadata; scripts need not be packages.', required=False)
 
     workflows = root / '.github' / 'workflows'
     workflow_found = None
@@ -91,14 +110,21 @@ def inspect_repository(root: Path) -> list[Check]:
     record('CI workflow', workflow_found,
            'Add repeatable checks in CI; a workflow file alone does not prove that CI succeeds.')
 
-    tests_found, complete = _test_files(root)
+    tests_found, incomplete_reason = _test_files(root)
     checks.append(Check(
         name='Tests',
         status='pass' if tests_found else 'warning',
-        evidence='Found a Python test module' if tests_found else (
-            f'No Python test module found in first {MAX_FILES_TO_INSPECT} files' if not complete
-            else 'No Python test module found'),
-        next_step='' if tests_found else 'Add regression tests and document how to run them.',
+        evidence=(
+            'Found a Python test module' if tests_found
+            else f'Incomplete search: {incomplete_reason}' if incomplete_reason
+            else 'No Python test module found'
+        ),
+        next_step=(
+            '' if tests_found
+            else 'Resolve filesystem errors or scan limits, then recheck.'
+            if incomplete_reason
+            else 'Add regression tests and document how to run them.'
+        ),
     ))
     record('Contributing guide', _first_file(root, ('CONTRIBUTING.md', '.github/CONTRIBUTING.md')),
            'Explain how others can report bugs and propose changes.', required=False)
@@ -114,8 +140,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument('--fail-on', choices=('none', 'warning'), default='none',
                         help='Exit with status 1 when a warning exists; default does not fail')
     args = parser.parse_args(argv)
-    path = Path(args.path).expanduser().resolve()
     try:
+        path = Path(args.path).expanduser().resolve()
         checks = inspect_repository(path)
     except (ValueError, OSError) as exc:
         parser.exit(2, f'repo-health-check: {exc}\n')
