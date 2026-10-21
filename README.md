@@ -68,8 +68,20 @@ Contact:
 - [LinkedIn profile](https://www.linkedin.com/in/chen-songquan-0a5246423/)
 - [LinkedIn service page](https://www.linkedin.com/services/page/a28237345922783843/)
 
-## Publication status
+## Experimental repository health inventory
 
-This package was prepared locally for review. A public remote repository,
-licence and final publication require an explicit approval decision. See the
-[publication checklist](PUBLICATION_CHECKLIST.md).
+A zero-dependency, read-only Python inventory tool is proposed in the
+[repository health documentation](docs/REPO_HEALTH_CHECK.md), with
+[dated OSS candidacy notes](docs/OSS_READINESS_2026-10-21.md).
+It detects basic maintenance files but does not execute project code or
+certify code quality, security, or Codex for Open Source eligibility.
+
+## Publication and licence status
+
+This repository is **already public** on GitHub. The
+[publication checklist](PUBLICATION_CHECKLIST.md) is a historical, unfinished
+review checklist, not proof that public visibility or formal release was
+authorised. There is no licence file on the default branch as of 21 October
+2026. Choosing a licence and declaring an open-source release require an
+explicit rights-holder decision and privacy review. Product source code from
+the private OpenTrendIQ Lite repository is not included.
