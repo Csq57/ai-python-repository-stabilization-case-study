@@ -1,3 +1,5 @@
+# SPDX-FileCopyrightText: 2026 Songquan Chen
+# SPDX-License-Identifier: MIT
 """Read-only CLI regression tests; Python standard library only."""
 from __future__ import annotations
 
