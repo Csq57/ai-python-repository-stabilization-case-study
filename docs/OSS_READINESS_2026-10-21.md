@@ -23,17 +23,17 @@ OpenAI's [Codex for Open Source application](https://openai.com/form/codex-for-o
 
 - Repository ownership: evidenced.
 - Public presence: evidenced.
-- Open-source licensing: **pending explicit rights-holder decision**.
+- Open-source licensing: **scoped MIT grant prepared in draft PR for four MVP files only**; the remainder of the mixed-content repository has no new licence grant. See [licensing scope](../LICENSING_SCOPE.md).
 - Independent adoption and sustained community activity: **not evidenced**.
 - Eligibility or acceptance: **not established**. No application has been submitted.
 
 ## Review gates before launching a standalone OSS project
 
 1. Verify ownership, privacy, credentials, confidential URLs, and third-party materials.
-2. Review project scope and choose a licence deliberately. Do not presume an MIT licence or change the licence automatically.
+2. Confirm authorship and the file-by-file MIT scope; do not relicense the case-study history or private product. Inspect the proposed changes before merging.
 3. Review this new read-only inventory tool, test it independently, and decide whether to publish or extract it to its own repository.
 4. Make a genuine release, document installation and usage, and accept feedback or issues from real developers.
 5. Record only independently verifiable adoption and maintenance evidence. Do not buy stars, create fake issues, fabricate downloads or customers, or claim that one self-authored PR proves community impact.
 6. If the project develops material value, apply with honest and dated evidence. Account email and OpenAI Organization ID must be supplied by the applicant; do not invent them.
 
-**No change to private repositories, existing licences, account subscription, or programme application is authorised by this document.**
+**No change to private repositories, legacy-content licensing, account subscription, or programme application is authorised by this document. The MVP MIT proposal has not been merged to the default branch.**
