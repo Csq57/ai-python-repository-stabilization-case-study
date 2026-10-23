@@ -1,0 +1,32 @@
+# SPDX-License-Identifier: MIT
+# Maintainer-run demonstration on a public, pinned, external repository.
+# NOT evidence that the external project's maintainers installed or used this Action.
+name: Public Python repository inventory fixture
+on:
+  push:
+    branches: [codex/repo-health-public-fixture-20261023]
+permissions:
+  contents: read
+jobs:
+  packaging-inventory:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout public PyPA packaging fixture at a pinned commit
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: pypa/packaging
+          ref: c1d2a9d8f5ca7cc11b7d2e902ed5ee3e255e8560
+          path: packaging-fixture
+          persist-credentials: false
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.12'
+      - name: Test pinned Repo Health Action against PyPA packaging
+        uses: Csq57/repo-health-check@da5d2ad23f9c72b2c5d9f1032c3eb4057129ec2e
+        with:
+          path: packaging-fixture
+          format: json
+          fail-on: warning
+          redact-root: 'true'
