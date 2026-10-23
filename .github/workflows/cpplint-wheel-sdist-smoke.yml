@@ -1,0 +1,112 @@
+name: cpplint pinned develop packaging smoke
+on:
+  push:
+    branches:
+      - codex/cpplint-445-release-readiness-20261023
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  wheel-and-sdist:
+    name: ${{ matrix.os }} / Python ${{ matrix.python-version }}
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.13', '3.14']
+    steps:
+      - name: Checkout pinned cpplint develop source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: cpplint/cpplint
+          ref: 926bf4b5cfd979c951a933e75e615f54430e8d8a
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Verify source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "926bf4b5cfd979c951a933e75e615f54430e8d8a"
+          python --version
+      - name: Build sdist and wheel (isolated)
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check "build>=1.2,<2"
+          python -m build --sdist --wheel --outdir dist
+      - name: Install built wheel and run clean-directory CLI smoke
+        shell: bash
+        run: |
+          python - <<'PY'
+          import importlib.util
+          import json
+          import os
+          import pathlib
+          import subprocess
+          import sys
+          import tempfile
+          
+          dist = pathlib.Path("dist")
+          wheels = list(dist.glob("*.whl"))
+          sdists = list(dist.glob("*.tar.gz"))
+          assert len(wheels) == len(sdists) == 1, (wheels, sdists)
+          wheel = wheels[0].resolve()
+          with tempfile.TemporaryDirectory(prefix="cpplint-packaging-") as directory:
+              root = pathlib.Path(directory)
+              venv = root / "venv"
+              subprocess.run([sys.executable, "-m", "venv", str(venv)], check=True)
+              python = venv / ("Scripts/python.exe" if os.name == "nt" else "bin/python")
+              subprocess.run(
+                  [str(python), "-m", "pip", "install", "--no-deps", str(wheel)],
+                  check=True, cwd=root
+              )
+              check_import = subprocess.run(
+                  [str(python), "-c",
+                   "import cpplint, importlib.metadata as m;"
+                   "print('version', m.version('cpplint'));"
+                   "print('module', cpplint.__file__)"
+                  ], capture_output=True, text=True, cwd=root, check=True
+              )
+              module_line = [s for s in check_import.stdout.splitlines() if s.startswith("module ")]
+              assert len(module_line) == 1, check_import.stdout
+              module_file = pathlib.Path(module_line[0][7:]).resolve()
+              assert module_file.is_relative_to(venv.resolve()), module_file
+              version = subprocess.run(
+                  [str(python), "-m", "cpplint", "--version"],
+                  capture_output=True, text=True, cwd=root, check=False
+              )
+              assert version.returncode == 0, (version.stdout, version.stderr)
+              assert "2.0.3-dev0" in version.stdout, version.stdout
+              target = root / "test_example.cc"
+              target.write_text("// Copyright 2026 Example\nint main() { return 0; }\n",
+                                encoding="utf-8")
+              before = target.read_bytes()
+              smoke = subprocess.run(
+                  [str(python), "-m", "cpplint", "--quiet", "--filter=-", str(target)],
+                  capture_output=True, text=True, cwd=root, check=False
+              )
+              assert smoke.returncode == 0, (smoke.stdout, smoke.stderr)
+              assert target.read_bytes() == before
+              evidence = {
+                  "source_sha": "926bf4b5cfd979c951a933e75e615f54430e8d8a",
+                  "python": sys.version.split()[0],
+                  "wheel": wheel.name, "sdist": sdists[0].name,
+                  "metadata": check_import.stdout.strip().splitlines(),
+                  "cli_version_stdout": version.stdout.strip(),
+                  "installed_module_under_venv": True,
+                  "no_target_mutation": True,
+                  "cli_return_code": smoke.returncode,
+              }
+              print("CPPLINT_PACKAGING_SMOKE", json.dumps(evidence, sort_keys=True))
+              summary = os.environ.get("GITHUB_STEP_SUMMARY")
+              if summary:
+                  with open(summary, "a", encoding="utf-8") as handle:
+                      handle.write("### cpplint pinned develop packaging smoke\n")
+                      handle.write("~~~json\n"+json.dumps(evidence, indent=2)+"\n~~~\n")
+          PY
