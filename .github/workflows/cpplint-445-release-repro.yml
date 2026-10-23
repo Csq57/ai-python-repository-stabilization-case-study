@@ -1,0 +1,99 @@
+name: cpplint issue 445 release-vs-develop reproduction
+on:
+  push:
+    branches:
+      - codex/cpplint-445-release-readiness-20261023
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reproduce:
+    name: ${{ matrix.ref_label }} / Python ${{ matrix.python-version }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - ref_label: release-2.0.2
+            cpplint_sha: 350702a4d39395571bd118c9a3cff0a573488d61
+            python-version: '3.13'
+          - ref_label: release-2.0.2
+            cpplint_sha: 350702a4d39395571bd118c9a3cff0a573488d61
+            python-version: '3.14'
+          - ref_label: develop-20261023
+            cpplint_sha: 926bf4b5cfd979c951a933e75e615f54430e8d8a
+            python-version: '3.13'
+          - ref_label: develop-20261023
+            cpplint_sha: 926bf4b5cfd979c951a933e75e615f54430e8d8a
+            python-version: '3.14'
+    steps:
+      - name: Checkout pinned public cpplint source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: cpplint/cpplint
+          ref: ${{ matrix.cpplint_sha }}
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Validate source identity
+        env:
+          EXPECTED_SHA: ${{ matrix.cpplint_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$EXPECTED_SHA"
+          python --version
+          git log -1 --format='%H %s'
+      - name: Install isolated test requirements
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check --quiet "pytest==9.0.3" "pytest-cov" "pytest-timeout" "testfixtures"
+      - name: Reproduce reported Python 3.14 quiet-mode failure
+        env:
+          SOURCE_LABEL: ${{ matrix.ref_label }}
+          SOURCE_SHA: ${{ matrix.cpplint_sha }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+          from pathlib import Path
+
+          source = Path("cpplint.py").read_text(encoding="utf-8")
+          command = [
+              sys.executable, "-m", "pytest", "-q", "--no-cov",
+              "-o", "addopts=", "cpplint_unittest.py::TestQuiet::testQuietWithoutErrors",
+          ]
+          result = subprocess.run(command, capture_output=True, text=True, check=False)
+          combined = result.stdout + "\n" + result.stderr
+          observed = {
+              "ref_label": os.environ["SOURCE_LABEL"],
+              "commit": os.environ["SOURCE_SHA"],
+              "python": sys.version.split()[0],
+              "test_exit_code": result.returncode,
+              "source_uses_codecs_open": "codecs.open(" in source,
+              "output_mentions_deprecation": "DeprecationWarning" in combined,
+              "pytest_summary": [
+                  line for line in combined.splitlines()
+                  if (" passed" in line or " failed" in line or " error" in line)
+              ][-5:],
+          }
+          print("CPPLINT_ISSUE445_PROBE", json.dumps(observed, sort_keys=True))
+          print("---- STDOUT (tail) ----")
+          print(result.stdout[-7000:])
+          print("---- STDERR (tail) ----")
+          print(result.stderr[-2000:])
+          if "not found" in combined.lower() and "testquiet" in combined.lower():
+              raise SystemExit("The named test could not be found: probe is invalid")
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as summary:
+              summary.write("### cpplint Issue #445 reproduction\n")
+              summary.write("Pinned public source only; no upstream files modified.\n\n")
+              summary.write("~~~json\n" + json.dumps(observed, indent=2) + "\n~~~\n")
+          PY
