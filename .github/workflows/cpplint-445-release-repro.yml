@@ -97,3 +97,41 @@ jobs:
               summary.write("Pinned public source only; no upstream files modified.\n\n")
               summary.write("~~~json\n" + json.dumps(observed, indent=2) + "\n~~~\n")
           PY
+      - name: Full suite comparison (expected release regression preserved)
+        env:
+          SOURCE_LABEL: ${{ matrix.ref_label }}
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import subprocess
+          import sys
+
+          command = [
+              sys.executable, "-m", "pytest", "-q", "--no-cov", "-o", "addopts=",
+          ]
+          result = subprocess.run(command, capture_output=True, text=True, check=False)
+          combined = result.stdout + "\n" + result.stderr
+          summary = [
+              line for line in combined.splitlines()
+              if (" passed" in line or " failed" in line or " errors" in line)
+          ][-8:]
+          print("CPPLINT_FULL_SUITE_PROBE", json.dumps({
+              "source_label": os.environ["SOURCE_LABEL"],
+              "python": sys.version.split()[0],
+              "exit_code": result.returncode,
+              "summary_lines": summary,
+              "mentions_codecs_open": "codecs.open() is deprecated" in combined,
+          }, sort_keys=True))
+          print(result.stdout[-9000:])
+          print(result.stderr[-2000:])
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as out:
+              out.write("\n### Full cpplint test suite (no coverage gate)\n")
+              out.write("~~~\n" + "\n".join(summary) + "\n~~~\n")
+          # This is a comparison experiment. The published 2.0.2/Python 3.14
+          # combination is *expected* to fail. Only validated develop needs
+          # to be fully green for a successful release-readiness comparison.
+          if os.environ["SOURCE_LABEL"].startswith("develop") and result.returncode:
+              raise SystemExit("Unexpected full-suite failure on develop")
+          PY
