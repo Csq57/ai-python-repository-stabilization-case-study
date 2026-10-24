@@ -135,3 +135,14 @@ jobs:
               if any(r["exit_code"] != 0 for r in results.values()):
                   raise SystemExit("Potential Python 3.15.1 regression in develop")
           PY
+      - name: "Diagnostic only: isolate os.path.commonprefix() warning"
+        # An intentionally narrow warning filter, not a production fix.
+        # Run even if the preceding development full-suite check fails,
+        # to test whether this warning alone explains the discrepancies.
+        if: ${{ always() && matrix.source.label == 'develop-fixed-20261023' }}
+        env:
+          PYTHONWARNINGS: 'ignore:os.path.commonprefix() is deprecated:DeprecationWarning'
+        shell: bash
+        run: |
+          python -c "import sys; assert sys.version_info[:3] == (3, 15, 1)"
+          python -m pytest -q --no-cov -o addopts=
