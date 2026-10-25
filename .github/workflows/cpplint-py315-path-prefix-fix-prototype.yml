@@ -137,3 +137,12 @@ jobs:
           PYTHONWARNINGS: "error:os.path.commonprefix() is deprecated:DeprecationWarning"
         run: |
           python -m pytest -q --no-cov -o addopts=
+      - name: Run upstream coverage and lint checks
+        if: ${{ matrix.os == 'ubuntu-latest' && matrix.python-version == '3.14' }}
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check --quiet ".[dev]" pre-commit
+          python -m pytest -q
+          python -m pylint cpplint.py
+          python -m mypy cpplint.py cpplint_clitest.py cpplint_unittest.py
+          pre-commit run --all-files
