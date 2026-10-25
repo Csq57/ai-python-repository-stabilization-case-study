@@ -123,6 +123,9 @@ jobs:
           changelog.write_text(cl, encoding="utf8")
           print("Prototype replacements: 3 calls, 2 test functions (5 test cases)")
           PY
+          python -m pip install --disable-pip-version-check --quiet "ruff==0.16.10"
+          python -m ruff format cpplint_unittest.py
+          python -m ruff format --check cpplint_unittest.py
           git diff --check
           git diff --stat
           git diff -- cpplint.py cpplint_unittest.py CHANGELOG.rst
