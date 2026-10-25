@@ -28,6 +28,24 @@ Official Python path documentation: https://docs.python.org/3.15/library/os.path
 
 The CI checks out the pinned public source and temporarily applies the patch without publishing or modifying the upstream repository. Python version 3.15.1 is pinned exactly; Python 3.13 and 3.14 matrix entries use GitHub-hosted patch versions.
 
+## pytest 9.1.1 maintainer follow-up
+
+On 25 Oct 2026 the upstream maintainer thanked us for clarifying that the Python 3.15 diagnostics are deprecation warnings, not Python exceptions, and asked whether updating pytest from 9.0.3 to 9.1.1 would change the observations:
+
+https://github.com/cpplint/cpplint/issues/445#issuecomment-6393325688
+
+Rechecked pinned Python **3.15.1** with **pytest 9.1.1**, without muting warnings and without changing the pinned upstream source other than applying the previously tested patch in the `patch` matrix mode:
+
+| Operating system | Unpatched `develop` | Patched `develop` |
+|---|---|---|
+| Ubuntu | 227 passed / 4 failed | **236 passed** |
+| Windows | 227 passed / 4 failed | **236 passed** |
+| macOS | 227 passed / 4 failed | **236 passed** |
+
+All six comparison jobs completed; baseline failures were kept as data rather than treated as passing individual tests. The **comparison harness** passed: https://github.com/Csq57/ai-python-repository-stabilization-case-study/actions/runs/40162126587
+
+New candidate PR should reference this 9.1.1 validation without claiming an upstream acceptance. The patch remains an independent proposal until applied to a proper cpplint fork and submitted through the standard GitHub PR mechanism.
+
 ## Reviewer notes and limits
 
 - This patch removes three deprecation-triggering calls and verifies path-component rather than character-prefix ancestry. The `ValueError` path is covered on Windows using paths on different drives.
