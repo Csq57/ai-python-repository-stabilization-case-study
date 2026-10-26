@@ -40,7 +40,7 @@ jobs:
           source = Path("cpplint.py").read_text(encoding="utf-8")
           tests = Path("cpplint_unittest.py").read_text(encoding="utf-8")
           assert "os.path.commonprefix(" not in source
-          assert source.count("os.path.relpath(fullname, root_dir)") == 2
+          assert source.count("os.path.relpath(fullname, root_dir)") == 3
           assert "os.path.commonpath([parent, child]) == os.path.commonpath([parent])" in source
           assert "test_is_parent_or_same_double_slash_root" in tests
           assert "test_double_slash_repository_name" in tests
