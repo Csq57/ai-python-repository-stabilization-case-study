@@ -23,7 +23,7 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           repository: Csq57/cpplint
-          ref: a959d1d8e35e18551040abd3dda8b72232bfdfef
+          ref: 8a4b3f5b221ba075b39f6c66ac8aea3ff4a3a0e2
           persist-credentials: false
       - name: Set up Python
         uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
@@ -33,7 +33,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git rev-parse HEAD)" = "a959d1d8e35e18551040abd3dda8b72232bfdfef"
+          test "$(git rev-parse HEAD)" = "8a4b3f5b221ba075b39f6c66ac8aea3ff4a3a0e2"
           python --version
           python - <<'PY'
           from pathlib import Path
