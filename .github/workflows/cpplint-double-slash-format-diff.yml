@@ -1,0 +1,34 @@
+name: cpplint double-slash candidate Ruff formatting diagnostic
+on:
+  push:
+    branches:
+      - codex/cpplint-double-slash-verification-20261026
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  format:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout exact followup source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: Csq57/cpplint
+          ref: a959d1d8e35e18551040abd3dda8b72232bfdfef
+          persist-credentials: false
+      - name: Set up Python
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: '3.14'
+      - name: Format with project's exact Ruff version and print patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -m pip install --disable-pip-version-check --quiet "ruff==0.16.10"
+          python -m ruff format cpplint.py cpplint_unittest.py
+          git diff --check
+          git diff -- cpplint.py cpplint_unittest.py
+          python -m ruff format --check cpplint.py cpplint_unittest.py
