@@ -1,0 +1,133 @@
+name: cpplint PR480 independent base-vs-head review
+on:
+  push:
+    branches:
+      - codex/cpplint-pr480-independent-review-20261027
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  review:
+    name: "${{ matrix.source.label }} / ${{ matrix.os }} / Python ${{ matrix.python-version }}"
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        source:
+          - label: base-develop
+            repository: cpplint/cpplint
+            sha: 926bf4b5cfd979c951a933e75e615f54430e8d8a
+          - label: pr480-head
+            repository: PNHD/cpplint
+            sha: d3f400388027d35d17715dc4a24e522abd5a9fea
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        python-version: ['3.12', '3.15.1']
+    steps:
+      - name: Checkout pinned public cpplint source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          repository: ${{ matrix.source.repository }}
+          ref: ${{ matrix.source.sha }}
+          persist-credentials: false
+      - name: Setup exact Python version
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Validate source commit and interpreter
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ matrix.source.sha }}
+        run: |
+          set -euo pipefail
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+          python --version
+          git log -1 --format='%H %s'
+      - name: Install common test requirements
+        shell: bash
+        run: |
+          python -m pip install --disable-pip-version-check --quiet "pytest==9.1.1" "pytest-cov" "pytest-timeout" "testfixtures"
+          python -c "import pytest; assert pytest.__version__ == '9.1.1'"
+      - name: Independent branch-pinned brace logic probes and full tests
+        env:
+          SOURCE_LABEL: ${{ matrix.source.label }}
+          SOURCE_SHA: ${{ matrix.source.sha }}
+          PYTHONUNBUFFERED: '1'
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json
+          import os
+          import re
+          import subprocess
+          import sys
+          import cpplint
+
+          slash = "\\"
+          specimens = {
+              "omp_one_line": ["#pragma omp parallel", "{", "}"],
+              "omp_two_line": ["#pragma omp parallel " + slash, "  num_threads(2)", "{", "}"],
+              "omp_three_line": ["#pragma omp parallel " + slash, "  num_threads(2) " + slash, "  default(none)", "{", "}"],
+              "omp_followed_by_blank": ["#pragma omp parallel " + slash, "  num_threads(2)", "", "{", "}"],
+              "omp_final_line_comment": ["#pragma omp parallel " + slash, "  num_threads(2)  // comment", "{", "}"],
+              "normal_if": ["if (condition)", "{", "}"],
+              "multiline_if": ["if (a && " + slash, "    b)", "{", "}"],
+              "pragma_then_if": ["#pragma omp parallel", "if (condition)", "{", "}"],
+              "pragma_blank_then_if": ["#pragma omp parallel " + slash, "", "if (condition)", "{", "}"],
+              "ended_multiline_define": ["#define MACRO " + slash, "  Compute()", "{", "}"],
+              "ended_three_line_define": ["#define SUM " + slash, "  one + " + slash, "  two", "{", "}"],
+              "ended_multiline_define_with_if": ["#define TEST " + slash, "  if (condition)", "{", "}"],
+          }
+          results = {}
+          for key, lines in specimens.items():
+              errors = []
+              clean = cpplint.CleansedLines(lines)
+              index = lines.index("{")
+              cpplint.CheckBraces("independent_pr480_probe.cc", clean, index, lambda f, ln, cat, conf, msg: errors.append({"category":cat, "message":msg, "line":ln}))
+              brace_messages = [e["message"] for e in errors if e["category"] == "whitespace/braces"]
+              results[key] = {"brace_warning": bool(brace_messages), "messages":brace_messages}
+
+          evidence = {
+              "label": os.environ["SOURCE_LABEL"],
+              "commit": os.environ["SOURCE_SHA"],
+              "python": sys.version.split()[0],
+              "os": sys.platform,
+              "specimens": results,
+          }
+          print("PR480_INDEPENDENT_PROBE", json.dumps(evidence, sort_keys=True))
+
+          cmd = [sys.executable, "-m", "pytest", "-q", "--no-cov", "-o", "addopts="]
+          process = subprocess.run(cmd, capture_output=True, text=True, check=False)
+          combined = process.stdout + "\n" + process.stderr
+          summaries = [line for line in combined.splitlines() if re.search(r"\b\d+ (?:passed|failed|skipped)\b", line)][-8:]
+          failures = [line.split(" - ")[0] for line in combined.splitlines() if line.startswith("FAILED ")]
+          observed = {
+              "label": os.environ["SOURCE_LABEL"],
+              "commit": os.environ["SOURCE_SHA"],
+              "python": sys.version.split()[0],
+              "os": sys.platform,
+              "pytest": "9.1.1",
+              "exit_code": process.returncode,
+              "summary": summaries,
+              "failed_cases": failures,
+              "mentions_os_path_commonprefix_deprecation": "os.path.commonprefix() is deprecated" in combined,
+          }
+          print("PR480_FULL_SUITE", json.dumps(observed, sort_keys=True))
+          print("---- stdout tail ----")
+          print(process.stdout[-5500:])
+          print("---- stderr tail ----")
+          print(process.stderr[-1000:])
+          with open(os.environ["GITHUB_STEP_SUMMARY"], "a", encoding="utf-8") as report:
+              report.write("### PR480 pinned branch comparison: " + os.environ["SOURCE_LABEL"] + "\n")
+              report.write("~~~json\n" + json.dumps(evidence, indent=2) + "\n~~~\n")
+              report.write("~~~json\n" + json.dumps(observed, indent=2) + "\n~~~\n")
+
+          if not summaries:
+              raise SystemExit("Full suite did not generate a trustworthy pytest summary")
+          if sys.version_info[:2] == (3, 12) and process.returncode:
+              raise SystemExit("Unexpected full suite failure on Python 3.12")
+          if sys.version_info[:2] == (3, 15) and process.returncode not in (0,1):
+              raise SystemExit("Invalid Python 3.15 execution")
+          PY
